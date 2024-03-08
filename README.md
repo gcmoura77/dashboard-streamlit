@@ -86,8 +86,4 @@ Existe uma variedade enorme de visualizações que poderia ser experimentadas e 
 - streamlit-shadcn-ui:  série de interfaces de componentes de frontend como: modal, hovercard, badges, etc. 
 - streamlit-elements: permite a criação de componentes de Dashboard arrastáveis e redimensionáveis.
 
-<<<<<<< HEAD
 ## Construindo o Dashboard com Streamlit
-=======
-## Construindo o Dashboard com Streamlit
->>>>>>> 80b6479 (criação do repositório local)
