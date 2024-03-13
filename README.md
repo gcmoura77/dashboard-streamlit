@@ -86,4 +86,7 @@ Existe uma variedade enorme de visualizações que poderia ser experimentadas e 
 - streamlit-shadcn-ui:  série de interfaces de componentes de frontend como: modal, hovercard, badges, etc. 
 - streamlit-elements: permite a criação de componentes de Dashboard arrastáveis e redimensionáveis.
 
+## Mapa dos Estados Brasileiros
+[How to create and interactive map of Brazil using Plotly.Express-Geojson in Python](https://python.plainenglish.io/how-to-create-a-interative-map-using-plotly-express-geojson-to-brazil-in-python-fb5527ae38fc)
+
 ## Construindo o Dashboard com Streamlit

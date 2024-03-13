@@ -3,6 +3,8 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import plotly.express as px
+import json
+from urllib.request import urlopen
 
 # page configuration
 st.set_page_config(
@@ -11,58 +13,68 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded")
 
-alt.themes.enable("dark")
-
 # load data
 df_reshaped = pd.read_csv('data/populacao_indigena_UF_2022.csv',sep=';')
+
+# Brazil GeoJSON
+with urlopen('https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson') as response:
+             Brazil = json.load(response) # Javascrip object notation 
+
+state_id_map = {}
+for feature in Brazil ['features']:
+ feature['id'] = feature['properties']['name']
+ state_id_map[feature['properties']['sigla']] = feature['id']
 
 # create a sidebar
 with st.sidebar:
     st.title('👨‍👩‍👧‍👦 População Indígena no Brasil')
     
+    # Region selection
     region = list(df_reshaped['Região'].unique())[::-1]     
-    # year_list = list(df_reshaped.year.unique())[::-1]
-    
+    region.append('Brasil')
     selected_region = st.selectbox('Selecione uma região', region, index=len(region)-1)
-    df_selected_region = df_reshaped[df_reshaped['Região'] == selected_region]
-    df_selected_region_sorted = df_selected_region.sort_values(by="population", ascending=False)
+    if selected_region == 'Brasil':
+        df_selected_region = df_reshaped
+    else:
+        df_selected_region = df_reshaped[df_reshaped['Região'] == selected_region]
+    df_selected_region_sorted = df_selected_region.sort_values(by="Pessoas indígenas", ascending=False)
 
+    # Color theme selection
     color_theme_list = ['blues', 'cividis', 'greens', 'inferno', 'magma', 'plasma', 'reds', 'rainbow', 'turbo', 'viridis']
-    selected_color_theme = st.selectbox('Select a color theme', color_theme_list)
+    selected_color_theme = st.selectbox('Selecionar a cor do tema', color_theme_list)
 
 ##########################
 # Plots
 
 # Heatmap
-def make_heatmap(input_df, input_y, input_x, input_color, input_color_theme):
-    heatmap = alt.Chart(input_df).mark_rect().encode(
-            y=alt.Y(f'{input_y}:O', axis=alt.Axis(title="Year", titleFontSize=18, titlePadding=15, titleFontWeight=900, labelAngle=0)),
-            x=alt.X(f'{input_x}:O', axis=alt.Axis(title="", titleFontSize=18, titlePadding=15, titleFontWeight=900)),
-            color=alt.Color(f'max({input_color}):Q',
-                             legend=None,
-                             scale=alt.Scale(scheme=input_color_theme)),
-            stroke=alt.value('black'),
-            strokeWidth=alt.value(0.25),
-        ).properties(width=900
-        ).configure_axis(
-        labelFontSize=12,
-        titleFontSize=12
-        ) 
-    # height=300
-    return heatmap
+# def make_heatmap(input_df, input_y, input_x, input_color, input_color_theme):
+#     heatmap = alt.Chart(input_df).mark_rect().encode(
+#             y=alt.Y(f'{input_y}:O', axis=alt.Axis(title="Year", titleFontSize=18, titlePadding=15, titleFontWeight=900, labelAngle=0)),
+#             x=alt.X(f'{input_x}:O', axis=alt.Axis(title="", titleFontSize=18, titlePadding=15, titleFontWeight=900)),
+#             color=alt.Color(f'max({input_color}):Q',
+#                              legend=None,
+#                              scale=alt.Scale(scheme=input_color_theme)),
+#             stroke=alt.value('black'),
+#             strokeWidth=alt.value(0.25),
+#         ).properties(width=900
+#         ).configure_axis(
+#         labelFontSize=12,
+#         titleFontSize=12
+#         ) 
+#     # height=300
+#     return heatmap
 
 # Choropleth map
-def make_choropleth(input_df, input_id, input_column, input_color_theme):
-    choropleth = px.choropleth(input_df, locations=input_id, color=input_column, locationmode="USA-states",
-                               color_continuous_scale=input_color_theme,
-                               range_color=(0, max(df_selected_year.population)),
-                               scope="usa",
-                               labels={'population':'Population'}
-                              )
+def make_choropleth(input_df, input_color_theme):
+    choropleth = px.choropleth(input_df, 
+                               locations="UF", 
+                               geojson = Brazil,
+                               color="Pessoas indígenas",
+                               hover_name="UF",
+                               hover_data=["Pessoas indígenas", "Região"],
+                               color_continuous_scale=input_color_theme)
+    choropleth.update_geos(fitbounds="locations", visible=False)
     choropleth.update_layout(
-        template='plotly_dark',
-        plot_bgcolor='rgba(0, 0, 0, 0)',
-        paper_bgcolor='rgba(0, 0, 0, 0)',
         margin=dict(l=0, r=0, t=0, b=0),
         height=350
     )
@@ -126,11 +138,18 @@ def format_number(num):
     return f'{num // 1000} K'
 
 # Calculation year-over-year population migrations
-def calculate_population_difference(input_df, input_year):
-  selected_year_data = input_df[input_df['year'] == input_year].reset_index()
-  previous_year_data = input_df[input_df['year'] == input_year - 1].reset_index()
-  selected_year_data['population_difference'] = selected_year_data.population.sub(previous_year_data.population, fill_value=0)
-  return pd.concat([selected_year_data.states, selected_year_data.id, selected_year_data.population, selected_year_data.population_difference], axis=1).sort_values(by="population_difference", ascending=False)
+# def calculate_population_difference(input_df, input_year):
+#   selected_year_data = input_df[input_df['year'] == input_year].reset_index()
+#   previous_year_data = input_df[input_df['year'] == input_year - 1].reset_index()
+#   selected_year_data['population_difference'] = selected_year_data.population.sub(previous_year_data.population, fill_value=0)
+#   return pd.concat([selected_year_data.states, selected_year_data.id, selected_year_data.population, selected_year_data.population_difference], axis=1).sort_values(by="population_difference", ascending=False)
+
+def calculate_percent_population(df_input):
+  df_selected_region_percent = df_input
+  df_selected_region_percent['percent_population'] = df_selected_region_percent['Pessoas indígenas'] / df_selected_region_percent['População'] 
+  df_selected_region_percent_sorted = df_selected_region_percent.sort_values(by="percent_population", ascending=False)
+  return df_selected_region_percent_sorted
+
 
 
 #######################
@@ -139,88 +158,69 @@ def calculate_population_difference(input_df, input_year):
 col = st.columns((1.5, 4.5, 2), gap='medium')
 
 with col[0]:
-    st.markdown('#### Gains/Losses')
+    st.markdown('#### Percentual da população do estado')
 
-    df_population_difference_sorted = calculate_population_difference(df_reshaped, selected_year)
+    df_population_percent_sorted = calculate_percent_population(df_selected_region)
 
-    if selected_year > 2010:
-        first_state_name = df_population_difference_sorted.states.iloc[0]
-        first_state_population = format_number(df_population_difference_sorted.population.iloc[0])
-        first_state_delta = format_number(df_population_difference_sorted.population_difference.iloc[0])
-    else:
-        first_state_name = '-'
-        first_state_population = '-'
-        first_state_delta = ''
-    st.metric(label=first_state_name, value=first_state_population, delta=first_state_delta)
+    first_state_name = df_population_percent_sorted.UF.iloc[0]
+    first_percent = f"{df_population_percent_sorted.percent_population.iloc[0]:.2%}"
+    st.metric(label=first_state_name, value=first_percent)
 
-    if selected_year > 2010:
-        last_state_name = df_population_difference_sorted.states.iloc[-1]
-        last_state_population = format_number(df_population_difference_sorted.population.iloc[-1])   
-        last_state_delta = format_number(df_population_difference_sorted.population_difference.iloc[-1])   
-    else:
-        last_state_name = '-'
-        last_state_population = '-'
-        last_state_delta = ''
-    st.metric(label=last_state_name, value=last_state_population, delta=last_state_delta)
-
+    # last_state_name = df_population_difference_sorted.states.iloc[-1]
+    # last_state_population = format_number(df_population_difference_sorted.population.iloc[-1])   
+    # last_state_delta = format_number(df_population_difference_sorted.population_difference.iloc[-1])   
+    # st.metric(label=last_state_name, value=last_state_population, delta=last_state_delta)
     
-    st.markdown('#### States Migration')
+    # st.markdown('#### States Migration')
 
-    if selected_year > 2010:
-        # Filter states with population difference > 50000
-        # df_greater_50000 = df_population_difference_sorted[df_population_difference_sorted.population_difference_absolute > 50000]
-        df_greater_50000 = df_population_difference_sorted[df_population_difference_sorted.population_difference > 50000]
-        df_less_50000 = df_population_difference_sorted[df_population_difference_sorted.population_difference < -50000]
-        
-        # % of States with population difference > 50000
-        states_migration_greater = round((len(df_greater_50000)/df_population_difference_sorted.states.nunique())*100)
-        states_migration_less = round((len(df_less_50000)/df_population_difference_sorted.states.nunique())*100)
-        donut_chart_greater = make_donut(states_migration_greater, 'Inbound Migration', 'green')
-        donut_chart_less = make_donut(states_migration_less, 'Outbound Migration', 'red')
-    else:
-        states_migration_greater = 0
-        states_migration_less = 0
-        donut_chart_greater = make_donut(states_migration_greater, 'Inbound Migration', 'green')
-        donut_chart_less = make_donut(states_migration_less, 'Outbound Migration', 'red')
+    # # Filter states with population difference > 50000
+    # # df_greater_50000 = df_population_difference_sorted[df_population_difference_sorted.population_difference_absolute > 50000]
+    # df_greater_50000 = df_population_difference_sorted[df_population_difference_sorted.population_difference > 50000]
+    # df_less_50000 = df_population_difference_sorted[df_population_difference_sorted.population_difference < -50000]
+    
+    # # % of States with population difference > 50000
+    # states_migration_greater = round((len(df_greater_50000)/df_population_difference_sorted.states.nunique())*100)
+    # states_migration_less = round((len(df_less_50000)/df_population_difference_sorted.states.nunique())*100)
+    # donut_chart_greater = make_donut(states_migration_greater, 'Inbound Migration', 'green')
+    # donut_chart_less = make_donut(states_migration_less, 'Outbound Migration', 'red')
 
-    migrations_col = st.columns((0.2, 1, 0.2))
-    with migrations_col[1]:
-        st.write('Inbound')
-        st.altair_chart(donut_chart_greater)
-        st.write('Outbound')
-        st.altair_chart(donut_chart_less)
+    # migrations_col = st.columns((0.2, 1, 0.2))
+    # with migrations_col[1]:
+    #     st.write('Inbound')
+    #     st.altair_chart(donut_chart_greater)
+    #     st.write('Outbound')
+    #     st.altair_chart(donut_chart_less)
 
 with col[1]:
-    st.markdown('#### Total Population')
+    st.markdown('#### Mapa por Estado')
     
-    choropleth = make_choropleth(df_selected_year, 'states_code', 'population', selected_color_theme)
+    choropleth = make_choropleth(df_selected_region, selected_color_theme)
     st.plotly_chart(choropleth, use_container_width=True)
     
-    heatmap = make_heatmap(df_reshaped, 'year', 'states', 'population', selected_color_theme)
-    st.altair_chart(heatmap, use_container_width=True)
+    # heatmap = make_heatmap(df_reshaped, 'year', 'states', 'population', selected_color_theme)
+    # st.altair_chart(heatmap, use_container_width=True)
 
 with col[2]:
-    st.markdown('#### Top States')
+    st.markdown('#### População Indígena Por Estado')
 
-    st.dataframe(df_selected_year_sorted,
-                 column_order=("states", "population"),
+    st.dataframe(df_selected_region_sorted,
+                 column_order=("UF", "Pessoas indígenas"),
                  hide_index=True,
                  width=None,
                  column_config={
-                    "states": st.column_config.TextColumn(
-                        "States",
+                    "UF": st.column_config.TextColumn(
+                        "Estados",
                     ),
-                    "population": st.column_config.ProgressColumn(
-                        "Population",
+                    "Pessoas indígenas": st.column_config.ProgressColumn(
+                        "Pessoas indígenas",
                         format="%f",
                         min_value=0,
-                        max_value=max(df_selected_year_sorted.population),
+                        max_value=max(df_selected_region_sorted['Pessoas indígenas']),
                      )}
                  )
     
-    with st.expander('About', expanded=True):
+    with st.expander('Sobre', expanded=True):
         st.write('''
-            - Data: [U.S. Census Bureau](<https://www.census.gov/data/datasets/time-series/demo/popest/2010s-state-total.html>).
-            - :orange[**Gains/Losses**]: states with high inbound/ outbound migration for selected year
-            - :orange[**States Migration**]: percentage of states with annual inbound/ outbound migration > 50,000
+            - Dados: IBGE - Censo Demográfico.
+            - :orange[**Informações**]: População residente, total e indígena, por localização do domicílio, segundo Unidades da Federação - Brasil - 2022
             ''')
